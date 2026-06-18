@@ -1,0 +1,117 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owns(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isString(field) {
+      return field is string;
+    }
+
+    function optionalString(field) {
+      return field == null || field is string;
+    }
+
+    function validUserCreate(userId) {
+      let data = request.resource.data;
+      return owns(userId)
+        && data.uid == userId
+        && isString(data.email)
+        && isString(data.displayName);
+    }
+
+    function validUserUpdate(userId) {
+      let data = request.resource.data;
+      return owns(userId)
+        && data.uid == resource.data.uid
+        && data.email == resource.data.email
+        && data.createdAt == resource.data.createdAt;
+    }
+
+    function validNotificationWrite() {
+      let data = request.resource.data;
+      return optionalString(data.title)
+        && optionalString(data.body)
+        && optionalString(data.type)
+        && optionalString(data.route)
+        && (data.isRead == null || data.isRead is bool)
+        && (data.archived == null || data.archived is bool);
+    }
+
+    function validFcmToken() {
+      let data = request.resource.data;
+      return isString(data.token)
+        && data.token.size() > 20
+        && data.token.size() < 4096;
+    }
+
+    // Public learning content. Signed-in users can read it; clients cannot
+    // edit it. Add/update subjects and chapters from Firebase Console,
+    // Admin SDK, or trusted backend only.
+    match /subjects/{subjectId} {
+      allow read: if signedIn();
+      allow write: if false;
+
+      match /chapters/{chapterId} {
+        allow read: if signedIn();
+        allow write: if false;
+
+        match /{document=**} {
+          allow read: if signedIn();
+          allow write: if false;
+        }
+      }
+    }
+
+    // Main user profile. A user can only access their own document.
+    match /users/{userId} {
+      allow read: if owns(userId);
+      allow create: if validUserCreate(userId);
+      allow update: if validUserUpdate(userId);
+      allow delete: if false;
+
+      // User progress is private to the user.
+      match /subjectProgress/{progressId} {
+        allow read, create, update: if owns(userId);
+        allow delete: if false;
+      }
+
+      // In-app notification history. The app may mark items read/archive.
+      // Backend/Admin SDK bypasses rules and can create server notifications.
+      match /notifications/{notificationId} {
+        allow read: if owns(userId);
+        allow create, update: if owns(userId) && validNotificationWrite();
+        allow delete: if false;
+      }
+
+      // Device tokens are private. Never expose these globally.
+      match /fcmTokens/{tokenId} {
+        allow read: if false;
+        allow create, update: if owns(userId) && validFcmToken();
+        allow delete: if owns(userId);
+      }
+
+      // Future private user subcollections are private by default.
+      match /{document=**} {
+        allow read, write: if owns(userId);
+      }
+    }
+
+    // Optional onboarding audit copy used by OnboardingRemoteDataSource.
+    match /onboarding/{userId} {
+      allow read, create, update: if owns(userId);
+      allow delete: if false;
+    }
+
+    // Everything else is closed by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
