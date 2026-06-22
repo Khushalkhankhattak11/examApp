@@ -102,6 +102,8 @@ class ProfileScreen extends ConsumerWidget {
                         isDark: profile.isDark,
                         onToggleTheme: notifier.toggleTheme,
                         onLogout: () => _handleLogout(context, ref),
+                        onDeleteAccount: () =>
+                            _handleDeleteAccount(context, ref),
                       ),
                       SizedBox(height: r.h20),
                       _AiInsightCard(r: r),
@@ -128,6 +130,78 @@ class ProfileScreen extends ConsumerWidget {
       await ref.read(authViewModelProvider.notifier).signOut();
       Navigator.pushReplacementNamed(context, AppRoutes.login);
     }
+  }
+
+  Future<void> _handleDeleteAccount(BuildContext context, WidgetRef ref) async {
+    final passwordController = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: const Color(0xFF1F2015),
+        title: const Text(
+          'Delete account?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This permanently deletes your profile, progress, notifications, and account. Enter your password to confirm.',
+              style: TextStyle(color: Color(0xFFC7C8AE)),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Password',
+                labelStyle: TextStyle(color: Color(0xFFC7C8AE)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final value = passwordController.text;
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+            },
+            child: const Text(
+              'Delete permanently',
+              style: TextStyle(color: Color(0xFFFFB4AB)),
+            ),
+          ),
+        ],
+      ),
+    );
+    passwordController.dispose();
+
+    if (password == null || !context.mounted) return;
+    final deleted = await ref
+        .read(authViewModelProvider.notifier)
+        .deleteAccount(password);
+    if (!context.mounted) return;
+
+    if (deleted) {
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.login,
+        (route) => false,
+      );
+      return;
+    }
+
+    final message = ref.read(authViewModelProvider).errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message ?? 'Could not delete account')),
+    );
   }
 }
 
@@ -528,12 +602,14 @@ class _ProfileMenu extends StatelessWidget {
   final bool isDark;
   final VoidCallback onToggleTheme;
   final VoidCallback onLogout;
+  final VoidCallback onDeleteAccount;
 
   const _ProfileMenu({
     required this.r,
     required this.isDark,
     required this.onToggleTheme,
     required this.onLogout,
+    required this.onDeleteAccount,
   });
 
   @override
@@ -647,6 +723,24 @@ class _ProfileMenu extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+        SizedBox(height: r.h10),
+        GestureDetector(
+          onTap: onDeleteAccount,
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(vertical: r.sp16),
+            child: Text(
+              'Delete account',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: r.fs14,
+                color: const Color(0xFFFFB4AB),
+                decoration: TextDecoration.underline,
+                decorationColor: const Color(0xFFFFB4AB),
+              ),
             ),
           ),
         ),

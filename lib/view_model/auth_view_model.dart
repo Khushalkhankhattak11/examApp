@@ -199,6 +199,22 @@ class AuthViewModel extends StateNotifier<AuthState> {
     state = const AuthState();
   }
 
+  // ───────── DELETE ACCOUNT ─────────
+  Future<bool> deleteAccount(String password) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    final result = await _auth.deleteAccount(password: password);
+
+    if (result is Failure<void>) {
+      state = state.copyWith(isLoading: false, errorMessage: result.message);
+      return false;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(AppConstants.kOnboarded);
+    state = const AuthState();
+    return true;
+  }
+
   // ───────── INTERNAL UPDATE ─────────
   void _update(AuthState Function(AuthState) fn) {
     if (!mounted) return;

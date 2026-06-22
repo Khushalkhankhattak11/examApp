@@ -17,6 +17,8 @@ abstract interface class IAuthRepository {
 
   Future<Result<void>> signOut();
 
+  Future<Result<void>> deleteAccount({required String password});
+
   Stream<bool> get isAuthenticated;
 }
 
@@ -68,6 +70,16 @@ class AuthRepository implements IAuthRepository {
   }
 
   @override
+  Future<Result<void>> deleteAccount({required String password}) async {
+    try {
+      await _remote.deleteAccount(password: password);
+      return const Success(null);
+    } catch (e) {
+      return Failure(_mapError(e), error: e);
+    }
+  }
+
+  @override
   Stream<bool> get isAuthenticated =>
       _remote.authStateChanges.map((u) => u != null);
 
@@ -79,6 +91,10 @@ class AuthRepository implements IAuthRepository {
     if (msg.contains('email-already')) return 'Email already exists';
     if (msg.contains('weak-password')) return 'Weak password';
     if (msg.contains('invalid-email')) return 'Invalid email';
+    if (msg.contains('invalid-credential')) return 'Incorrect password';
+    if (msg.contains('requires-recent-login')) {
+      return 'Please sign in again before deleting your account';
+    }
 
     return 'Something went wrong';
   }

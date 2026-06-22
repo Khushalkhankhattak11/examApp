@@ -9,6 +9,14 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+# Generated Flutter/Xcode output can contain complete third-party source
+# checkouts (including their internal tests). It is not part of this app and
+# must not be analyzed using ExamAce's package configuration.
+analyzer:
+  exclude:
+    - build/**
+    - ios/.symlinks/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

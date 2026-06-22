@@ -41,7 +41,7 @@ const _subjects = [
   'Data Science',
   'Economics',
   'Electrical Engineering',
-  'English',
+  'English Grammar Basics',
   'Environmental Science',
   'Geography',
   'General Science',

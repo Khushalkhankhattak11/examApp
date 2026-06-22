@@ -74,12 +74,12 @@ service cloud.firestore {
       allow read: if owns(userId);
       allow create: if validUserCreate(userId);
       allow update: if validUserUpdate(userId);
-      allow delete: if false;
+      allow delete: if owns(userId);
 
       // User progress is private to the user.
       match /subjectProgress/{progressId} {
         allow read, create, update: if owns(userId);
-        allow delete: if false;
+        allow delete: if owns(userId);
       }
 
       // In-app notification history. The app may mark items read/archive.
@@ -87,7 +87,7 @@ service cloud.firestore {
       match /notifications/{notificationId} {
         allow read: if owns(userId);
         allow create, update: if owns(userId) && validNotificationWrite();
-        allow delete: if false;
+        allow delete: if owns(userId);
       }
 
       // Device tokens are private. Never expose these globally.
@@ -106,7 +106,7 @@ service cloud.firestore {
     // Optional onboarding audit copy used by OnboardingRemoteDataSource.
     match /onboarding/{userId} {
       allow read, create, update: if owns(userId);
-      allow delete: if false;
+      allow delete: if owns(userId);
     }
 
     // Everything else is closed by default.
