@@ -23,7 +23,7 @@ class ProfileState {
 
   const ProfileState({
     this.testsTaken = 42,
-    this.streakDays = 7,
+    this.streakDays = 0,
     this.bestScore = 91,
     this.totalSolved = 2340,
     this.isDark = true,
@@ -69,6 +69,16 @@ class ProfileScreen extends ConsumerWidget {
 
     // ── Real user from Firestore ──────────────
     final user = ref.watch(currentUserProvider).valueOrNull;
+    final streakDays = user == null
+        ? 0
+        : ref.watch(dailyStreakProvider(user.uid)).valueOrNull ??
+              user.streakDays;
+    final dynamicProfile = profile.copyWith(
+      testsTaken: user?.testsTaken ?? 0,
+      streakDays: streakDays,
+      bestScore: user?.bestScore ?? 0,
+      totalSolved: user?.totalSolved ?? 0,
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF131409),
@@ -93,9 +103,9 @@ class ProfileScreen extends ConsumerWidget {
                   padding: EdgeInsets.fromLTRB(r.sp20, r.h20, r.sp20, r.h100),
                   child: Column(
                     children: [
-                      _ProfileHero(r: r, profile: profile, user: user),
+                      _ProfileHero(r: r, profile: dynamicProfile, user: user),
                       SizedBox(height: r.h20),
-                      _StatsBentoGrid(r: r, profile: profile),
+                      _StatsBentoGrid(r: r, profile: dynamicProfile),
                       SizedBox(height: r.h20),
                       _ProfileMenu(
                         r: r,

@@ -19,7 +19,7 @@ class SubjectModel {
 
   const SubjectModel({
     required this.id,
-    this.active = false,
+    this.active = true,
     this.authors = const [],
     this.category = '',
     this.code = '',
@@ -42,11 +42,11 @@ class SubjectModel {
 
     return SubjectModel(
       id: doc.id,
-      active: map['active'] as bool? ?? false,
+      // Existing Firestore subjects may not have an `active` field. Treat
+      // those as enabled; only an explicit `active: false` disables one.
+      active: map['active'] as bool? ?? true,
       authors:
-          (map['authors'] as List<dynamic>?)
-              ?.whereType<String>()
-              .toList() ??
+          (map['authors'] as List<dynamic>?)?.whereType<String>().toList() ??
           const [],
       category: map['category'] as String? ?? '',
       code: map['code'] as String? ?? '',

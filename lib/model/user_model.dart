@@ -15,12 +15,16 @@ class UserModel {
   final String city;
   final String educationLevel;
   final String educationSubject;
+  final String academicStatus;
 
   // Stats fields (written by quiz engine, read here)
   final int testsTaken;
   final int streakDays;
   final int bestScore; // 0–100
   final int totalSolved;
+  final int averageScore;
+  final int scoreTotal;
+  final int bestRank;
 
   UserModel({
     required this.uid,
@@ -35,10 +39,14 @@ class UserModel {
     this.city = '',
     this.educationLevel = '',
     this.educationSubject = '',
+    this.academicStatus = '',
     this.testsTaken = 0,
     this.streakDays = 0,
     this.bestScore = 0,
     this.totalSolved = 0,
+    this.averageScore = 0,
+    this.scoreTotal = 0,
+    this.bestRank = 0,
   }) : createdAt = createdAt ?? DateTime.now();
 
   // ── Firestore serialization ────────────────────
@@ -56,10 +64,14 @@ class UserModel {
       city: map['city'] as String? ?? '',
       educationLevel: map['educationLevel'] as String? ?? '',
       educationSubject: map['educationSubject'] as String? ?? '',
+      academicStatus: map['academicStatus'] as String? ?? '',
       testsTaken: (map['testsTaken'] as num?)?.toInt() ?? 0,
       streakDays: (map['streakDays'] as num?)?.toInt() ?? 0,
       bestScore: (map['bestScore'] as num?)?.toInt() ?? 0,
       totalSolved: (map['totalSolved'] as num?)?.toInt() ?? 0,
+      averageScore: (map['averageScore'] as num?)?.toInt() ?? 0,
+      scoreTotal: (map['scoreTotal'] as num?)?.toInt() ?? 0,
+      bestRank: (map['bestRank'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -76,10 +88,14 @@ class UserModel {
     'city': city,
     'educationLevel': educationLevel,
     'educationSubject': educationSubject,
+    'academicStatus': academicStatus,
     'testsTaken': testsTaken,
     'streakDays': streakDays,
     'bestScore': bestScore,
     'totalSolved': totalSolved,
+    'averageScore': averageScore,
+    'scoreTotal': scoreTotal,
+    'bestRank': bestRank,
   };
 
   UserModel copyWith({
@@ -95,10 +111,14 @@ class UserModel {
     String? city,
     String? educationLevel,
     String? educationSubject,
+    String? academicStatus,
     int? testsTaken,
     int? streakDays,
     int? bestScore,
     int? totalSolved,
+    int? averageScore,
+    int? scoreTotal,
+    int? bestRank,
   }) => UserModel(
     uid: uid ?? this.uid,
     email: email ?? this.email,
@@ -112,10 +132,14 @@ class UserModel {
     city: city ?? this.city,
     educationLevel: educationLevel ?? this.educationLevel,
     educationSubject: educationSubject ?? this.educationSubject,
+    academicStatus: academicStatus ?? this.academicStatus,
     testsTaken: testsTaken ?? this.testsTaken,
     streakDays: streakDays ?? this.streakDays,
     bestScore: bestScore ?? this.bestScore,
     totalSolved: totalSolved ?? this.totalSolved,
+    averageScore: averageScore ?? this.averageScore,
+    scoreTotal: scoreTotal ?? this.scoreTotal,
+    bestRank: bestRank ?? this.bestRank,
   );
 
   // Get initials for avatar from fullName or displayName
@@ -127,13 +151,6 @@ class UserModel {
     }
     return name.isNotEmpty ? name[0].toUpperCase() : '?';
   }
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) || (other is UserModel && uid == other.uid);
-
-  @override
-  int get hashCode => uid.hashCode;
 
   @override
   String toString() =>

@@ -1,9 +1,9 @@
 import 'dart:math';
-import 'package:examace/const/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../model/model.dart';
 import '../../view_model/providers.dart';
+import 'topic_lesson_screen.dart';
 
 // ── Colors ──────────────────────────────────────────────────────────────────
 const kBg = Color(0xFF0E0F0E);
@@ -20,7 +20,9 @@ const kActivePurple = Color(0xFF2A1A2A);
 
 // ── Main Screen ──────────────────────────────────────────────────────────────
 class EnglishProficiencyScreen extends ConsumerStatefulWidget {
-  const EnglishProficiencyScreen({super.key});
+  final String subjectId;
+
+  const EnglishProficiencyScreen({super.key, required this.subjectId});
   @override
   ConsumerState<EnglishProficiencyScreen> createState() =>
       _EnglishProficiencyScreenState();
@@ -29,14 +31,14 @@ class EnglishProficiencyScreen extends ConsumerStatefulWidget {
 class _EnglishProficiencyScreenState
     extends ConsumerState<EnglishProficiencyScreen> {
   int _expandedIndex = 0;
+  String? _appliedProgressKey;
 
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).valueOrNull;
-    final educationSubject = user?.educationSubject.trim() ?? '';
     final subjectsAsync = ref.watch(activeSubjectsProvider);
     final subjects = subjectsAsync.valueOrNull ?? const <SubjectModel>[];
-    final subject = subjects.matchEducationSubject(educationSubject);
+    final subject = subjects.subjectById(widget.subjectId);
     final progressSubjectId = subject?.progressSubjectId ?? '';
     final chaptersSubjectId = subject?.id ?? '';
     final chaptersAsync = chaptersSubjectId.isEmpty
@@ -77,7 +79,7 @@ class _EnglishProficiencyScreenState
           padding: const EdgeInsets.only(bottom: 24),
           child: Column(
             children: [
-              _buildHeader(),
+              _buildHeader(subject),
               const SizedBox(height: 4),
               _buildHeroCard(
                 subject: subject,
@@ -90,6 +92,8 @@ class _EnglishProficiencyScreenState
                 chaptersAsync: chaptersAsync,
                 chapters: chapters,
                 progress: progress,
+                subjectDocumentId: chaptersSubjectId,
+                progressSubjectId: progressSubjectId,
               ),
               const SizedBox(height: 10),
               _buildFullTestCard(totalTopics: totalTopics),
@@ -101,7 +105,7 @@ class _EnglishProficiencyScreenState
   }
 
   // ── Header ────────────────────────────────────────────────────────────────
-  Widget _buildHeader() {
+  Widget _buildHeader(SubjectModel? subject) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
@@ -111,9 +115,11 @@ class _EnglishProficiencyScreenState
             onTap: () => Navigator.maybePop(context),
             child: const Icon(Icons.arrow_back, color: kLime, size: 22),
           ),
-          const Text(
-            'English Proficiency',
-            style: TextStyle(
+          Text(
+            subject?.displayTitle.isNotEmpty == true
+                ? subject!.displayTitle
+                : 'Course',
+            style: const TextStyle(
               color: kLime,
               fontSize: 17,
               fontWeight: FontWeight.w600,
@@ -245,6 +251,8 @@ class _EnglishProficiencyScreenState
     required AsyncValue<List<SubjectChapterModel>>? chaptersAsync,
     required List<SubjectChapterModel> chapters,
     required SubjectProgressModel? progress,
+    required String subjectDocumentId,
+    required String progressSubjectId,
   }) {
     if (chaptersAsync?.isLoading == true && chapters.isEmpty) {
       return const Padding(
@@ -274,11 +282,24 @@ class _EnglishProficiencyScreenState
     }
 
     final states = _chapterStates(chapters, progress);
-    final firstOpenIndex = states.indexWhere((state) => state.unlocked);
-    if (_expandedIndex < 0 ||
-        _expandedIndex >= chapters.length ||
-        !states[_expandedIndex].unlocked) {
-      _expandedIndex = firstOpenIndex == -1 ? 0 : firstOpenIndex;
+    final progressKey = [
+      progress?.lastChapterId ?? '',
+      ...?progress?.completedChapterIds,
+    ].join('|');
+    if (_appliedProgressKey != progressKey) {
+      _appliedProgressKey = progressKey;
+      final firstIncompleteIndex = states.indexWhere(
+        (state) => state.unlocked && !state.completed,
+      );
+      final lastUnlockedIndex = states.lastIndexWhere(
+        (state) => state.unlocked,
+      );
+      _expandedIndex = firstIncompleteIndex != -1
+          ? firstIncompleteIndex
+          : max(0, lastUnlockedIndex);
+    } else if (_expandedIndex >= chapters.length ||
+        (_expandedIndex >= 0 && !states[_expandedIndex].unlocked)) {
+      _expandedIndex = states.indexWhere((state) => state.unlocked);
     }
 
     return Padding(
@@ -295,8 +316,24 @@ class _EnglishProficiencyScreenState
                   dailyGoalText: _dailyGoalText(chapter, state),
                   goalProgress: state.progress,
                   onCollapse: () => setState(() => _expandedIndex = -1),
-                  onPressed: () =>
-                      Navigator.pushReplacementNamed(context, AppRoutes.quizz),
+                  onPressed: () async {
+                    final completed = await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(
+                        builder: (_) => ChapterTopicsScreen(
+                          subjectDocumentId: subjectDocumentId,
+                          progressSubjectId: progressSubjectId,
+                          chapterId: chapter.id,
+                          chapterTitle: title,
+                          chapterMcqs: chapter.chapterMcqs,
+                        ),
+                      ),
+                    );
+                    if (completed == true && mounted) {
+                      setState(() {
+                        _expandedIndex = min(index + 1, chapters.length - 1);
+                      });
+                    }
+                  },
                 )
               : _ChapterCollapsed(
                   icon: _chapterIcon(state),
@@ -418,34 +455,41 @@ class _EnglishProficiencyScreenState
     List<SubjectChapterModel> chapters,
     SubjectProgressModel? progress,
   ) {
-    final completedTopics = progress?.completedTopics ?? 0;
+    final completedTopicIds = progress?.completedTopicIds.toSet() ?? <String>{};
     final completedChapterIds =
         progress?.completedChapterIds.toSet() ?? const <String>{};
-    var cumulativeBefore = 0;
     var previousCompleted = true;
 
     return List.generate(chapters.length, (index) {
       final chapter = chapters[index];
       final units = chapter.completionUnits;
-      final completedInChapter = (completedTopics - cumulativeBefore)
-          .clamp(0, units)
-          .toInt();
+      final completedInChapter = chapter.topicIds.isEmpty
+          ? (_isLastChapter(progress?.lastChapterId ?? '', chapter) ? 1 : 0)
+          : chapter.topicIds.where(completedTopicIds.contains).length;
       final completed =
           _containsChapterId(completedChapterIds, chapter) ||
-          completedInChapter >= units;
+          (chapter.topicIds.isNotEmpty &&
+              chapter.topicIds.every(completedTopicIds.contains));
       final unlocked = index == 0 || previousCompleted;
       final state = _ChapterUiState(
         unlocked: unlocked,
         completed: completed,
         inProgress: unlocked && completedInChapter > 0 && !completed,
-        completedUnits: completed ? units : completedInChapter,
+        completedUnits: completed
+            ? units
+            : completedInChapter.clamp(0, units).toInt(),
         totalUnits: units,
       );
 
-      cumulativeBefore += units;
       previousCompleted = completed;
       return state;
     });
+  }
+
+  bool _isLastChapter(String lastChapterId, SubjectChapterModel chapter) {
+    return lastChapterId == chapter.id ||
+        lastChapterId == chapter.chapterId ||
+        lastChapterId == chapter.progressChapterId;
   }
 
   bool _containsChapterId(
@@ -510,64 +554,18 @@ class _ChapterUiState {
 }
 
 extension on List<SubjectModel> {
-  SubjectModel? matchEducationSubject(String educationSubject) {
-    final needle = educationSubject.normalizedSubjectKey;
-    if (needle.isEmpty || needle == 'other') return null;
-
+  SubjectModel? subjectById(String subjectId) {
     for (final subject in this) {
-      final exactKeys = [
-        subject.id,
-        subject.subjectId,
-        subject.title,
-        subject.name,
-        subject.code,
-      ].map((value) => value.normalizedSubjectKey);
-
-      if (exactKeys.contains(needle)) return subject;
-    }
-
-    for (final subject in this) {
-      final searchable = [
-        subject.title,
-        subject.name,
-        subject.description,
-        subject.definition,
-        subject.category,
-      ].map((value) => value.normalizedSubjectKey);
-
-      if (searchable.any(
-        (value) =>
-            value.isNotEmpty &&
-            (needle.contains(value) || value.contains(needle)),
-      )) {
+      if (subject.id == subjectId || subject.subjectId == subjectId) {
         return subject;
       }
     }
-
-    final subjectWords = educationSubject.trim().split(RegExp(r'\s+'));
-    final firstWordKey = subjectWords.isEmpty
-        ? ''
-        : subjectWords.first.normalizedSubjectKey;
-    if (firstWordKey.isEmpty) return null;
-
-    for (final subject in this) {
-      if (subject.title.normalizedSubjectKey == firstWordKey ||
-          subject.name.normalizedSubjectKey.contains(firstWordKey)) {
-        return subject;
-      }
-    }
-
     return null;
   }
 }
 
 extension on SubjectModel {
   String get progressSubjectId => subjectId.isNotEmpty ? subjectId : id;
-}
-
-extension on String {
-  String get normalizedSubjectKey =>
-      toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 }
 
 // ── Collapsed Chapter Row ─────────────────────────────────────────────────
@@ -765,10 +763,10 @@ class _ChapterExpanded extends StatelessWidget {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.timer_outlined, color: kBg, size: 16),
+                        Icon(Icons.menu_book_outlined, color: kBg, size: 16),
                         SizedBox(width: 6),
                         Text(
-                          'TAKE QUIZ',
+                          'OPEN TOPICS',
                           style: TextStyle(
                             color: kBg,
                             fontSize: 13,

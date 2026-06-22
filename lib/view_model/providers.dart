@@ -9,6 +9,7 @@ import '../repository/onboarding_repository.dart';
 import '../repository/subject_chapter_repository.dart';
 import '../repository/subject_progress_repository.dart';
 import '../repository/subject_repository.dart';
+import '../repository/subject_topic_repository.dart';
 import '../repository/notification_repository.dart';
 import '../repository/user_repository.dart'; // ← ADD
 import '../model/model.dart'; // ← ADD
@@ -46,6 +47,30 @@ final subjectProgressRepositoryProvider = Provider<SubjectProgressRepository>((
 ) {
   return SubjectProgressRepository();
 });
+
+final subjectTopicRepositoryProvider = Provider<SubjectTopicRepository>((ref) {
+  return SubjectTopicRepository();
+});
+
+class SubjectTopicsRequest {
+  final String subjectId;
+  final String chapterId;
+
+  const SubjectTopicsRequest({
+    required this.subjectId,
+    required this.chapterId,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SubjectTopicsRequest &&
+          subjectId == other.subjectId &&
+          chapterId == other.chapterId;
+
+  @override
+  int get hashCode => Object.hash(subjectId, chapterId);
+}
 
 class SubjectProgressRequest {
   final String uid;
@@ -87,6 +112,17 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
   );
 });
 
+/// Records one streak day per local calendar day. Consecutive days increment
+/// the counter; returning after a missed day resets it to one.
+final dailyStreakProvider = FutureProvider.family<int, String>((ref, uid) {
+  return ref.read(userRepositoryProvider).updateDailyStreak(uid);
+});
+
+final recentActivitiesProvider =
+    StreamProvider.family<List<QuizActivityModel>, String>((ref, uid) {
+      return ref.read(userRepositoryProvider).watchRecentActivities(uid);
+    });
+
 final userNotificationsProvider =
     StreamProvider.family<List<AppNotificationModel>, String>((ref, uid) {
       return ref.read(notificationRepositoryProvider).watchNotifications(uid);
@@ -101,6 +137,19 @@ final subjectChaptersProvider =
       return ref
           .read(subjectChapterRepositoryProvider)
           .watchSubjectChapters(subjectId);
+    });
+
+final subjectTopicsProvider =
+    StreamProvider.family<List<SubjectTopicModel>, SubjectTopicsRequest>((
+      ref,
+      request,
+    ) {
+      return ref
+          .read(subjectTopicRepositoryProvider)
+          .watchChapterTopics(
+            subjectId: request.subjectId,
+            chapterId: request.chapterId,
+          );
     });
 
 final subjectProgressProvider =

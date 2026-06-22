@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../model/model.dart';
 import '../lecture/noun_lecture_screen.dart';
 import '../../view_model/providers.dart';
@@ -24,6 +25,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // ── Real user from Firestore ──────────────
     final user = ref.watch(currentUserProvider).valueOrNull;
+    final streakDays = user == null
+        ? 0
+        : ref.watch(dailyStreakProvider(user.uid)).valueOrNull ??
+              user.streakDays;
 
     return Scaffold(
       backgroundColor: const Color(0xFF131409),
@@ -36,6 +41,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 isDark: isDark,
                 onToggle: themeVm.toggleDarkLight,
                 user: user,
+                streakDays: streakDays,
               ),
               Expanded(
                 child: SingleChildScrollView(
@@ -44,13 +50,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     children: [
                       _ResumeCard(user: user),
                       const SizedBox(height: 20),
-                      const _StatsRow(),
+                      _StatsRow(user: user),
                       const SizedBox(height: 20),
                       const _DailyChallengeCard(),
                       const SizedBox(height: 20),
                       const _QuickPracticeSection(),
                       const SizedBox(height: 20),
-                      const _RecentActivitySection(),
+                      _RecentActivitySection(uid: user?.uid),
                     ],
                   ),
                 ),
@@ -70,11 +76,13 @@ class _TopBar extends StatelessWidget {
   final bool isDark;
   final VoidCallback onToggle;
   final UserModel? user;
+  final int streakDays;
 
   const _TopBar({
     required this.isDark,
     required this.onToggle,
     required this.user,
+    required this.streakDays,
   });
 
   @override
@@ -187,17 +195,17 @@ class _TopBar extends StatelessWidget {
                 color: const Color(0xFF464834).withValues(alpha: 0.3),
               ),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(
+                const Icon(
                   Icons.local_fire_department_rounded,
                   color: Color(0xFFD8EE36),
                   size: 16,
                 ),
-                SizedBox(width: 4),
+                const SizedBox(width: 4),
                 Text(
-                  '7',
-                  style: TextStyle(
+                  '$streakDays',
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFFD8EE36),
@@ -291,6 +299,8 @@ class _ResumeCard extends ConsumerWidget {
             ),
           );
     final progress = progressAsync?.valueOrNull;
+    final isLoading = user == null || subjectsAsync.isLoading;
+    final canResume = !isLoading && firebaseSubject != null;
     final course =
         firebaseSubject?.toResumeCourse(progress) ??
         (educationSubject.isEmpty || educationSubject.toLowerCase() == 'other'
@@ -409,19 +419,42 @@ class _ResumeCard extends ConsumerWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const EnglishProficiencyScreen(),
-                      ),
-                    );
-                  },
-                  child: const Row(
+                  onPressed: canResume
+                      ? () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => EnglishProficiencyScreen(
+                                subjectId: firebaseSubject.id,
+                              ),
+                            ),
+                          );
+                        }
+                      : null,
+                  child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Resume Session'),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 18),
+                      if (isLoading) ...[
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF191E00),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Text(
+                        isLoading
+                            ? 'Loading Course'
+                            : canResume
+                            ? 'Resume Session'
+                            : 'Course Not Available',
+                      ),
+                      if (canResume) ...[
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_rounded, size: 18),
+                      ],
                     ],
                   ),
                 ),
@@ -517,22 +550,35 @@ extension on String {
 //  STATS ROW
 // ─────────────────────────────────────────────
 class _StatsRow extends StatelessWidget {
-  const _StatsRow();
+  final UserModel? user;
+
+  const _StatsRow({required this.user});
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    final testsTaken = user?.testsTaken ?? 0;
+    final averageScore = user?.averageScore ?? 0;
+    final bestRank = user?.bestRank ?? 0;
+
+    return Row(
       children: [
         Expanded(
-          child: _StatCard(label: 'TESTS DONE', value: '24'),
+          child: _StatCard(label: 'TESTS DONE', value: '$testsTaken'),
         ),
-        SizedBox(width: 10),
+        const SizedBox(width: 10),
         Expanded(
-          child: _StatCard(label: 'AVG SCORE', value: '71%', highlight: true),
+          child: _StatCard(
+            label: 'AVG SCORE',
+            value: '$averageScore%',
+            highlight: true,
+          ),
         ),
-        SizedBox(width: 10),
+        const SizedBox(width: 10),
         Expanded(
-          child: _StatCard(label: 'BEST RANK', value: '#142'),
+          child: _StatCard(
+            label: 'BEST RANK',
+            value: bestRank > 0 ? '#$bestRank' : '--',
+          ),
         ),
       ],
     );
@@ -864,11 +910,17 @@ class _PracticeCard extends StatelessWidget {
 // ─────────────────────────────────────────────
 //  RECENT ACTIVITY
 // ─────────────────────────────────────────────
-class _RecentActivitySection extends StatelessWidget {
-  const _RecentActivitySection();
+class _RecentActivitySection extends ConsumerWidget {
+  final String? uid;
+
+  const _RecentActivitySection({required this.uid});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activitiesAsync = uid == null
+        ? const AsyncValue<List<QuizActivityModel>>.data([])
+        : ref.watch(recentActivitiesProvider(uid!));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -887,24 +939,76 @@ class _RecentActivitySection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _ActivityTile(
-          title: 'CSS MPT Mock #04',
-          date: 'Oct 24, 2023',
-          score: '82/100',
-          scoreColor: const Color(0xFFD1BCFF),
-          scoreBg: const Color(0xFF5822B8),
-        ),
-        const SizedBox(height: 10),
-        _ActivityTile(
-          title: 'GK: Current Affairs',
-          date: 'Oct 22, 2023',
-          score: '45/60',
-          scoreColor: const Color(0xFFFFB4AB),
-          scoreBg: const Color(0xFF93000A),
+        activitiesAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(
+              child: CircularProgressIndicator(color: Color(0xFFD8EE36)),
+            ),
+          ),
+          error: (_, _) =>
+              const _EmptyActivity(message: 'Unable to load recent activity.'),
+          data: (activities) {
+            if (activities.isEmpty) {
+              return const _EmptyActivity(
+                message: 'Complete a quiz to see activity here.',
+              );
+            }
+            return Column(
+              children: activities
+                  .take(5)
+                  .map((activity) {
+                    final date = activity.completedAt == null
+                        ? 'Just now'
+                        : DateFormat(
+                            'MMM d, y • h:mm a',
+                          ).format(activity.completedAt!.toLocal());
+                    final strongScore = activity.scorePercent >= 70;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _ActivityTile(
+                        title: activity.title,
+                        date: date,
+                        score:
+                            '${activity.correctAnswers}/${activity.totalQuestions}',
+                        scoreColor: strongScore
+                            ? const Color(0xFFD8EE36)
+                            : const Color(0xFFFFB4AB),
+                        scoreBg: strongScore
+                            ? const Color(0xFF465000)
+                            : const Color(0xFF93000A),
+                      ),
+                    );
+                  })
+                  .toList(growable: false),
+            );
+          },
         ),
       ],
     );
   }
+}
+
+class _EmptyActivity extends StatelessWidget {
+  final String message;
+
+  const _EmptyActivity({required this.message});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: const Color(0xCC131309),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: const Color(0xFF1E1E2E)),
+    ),
+    child: Text(
+      message,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: Color(0xFFC7C8AE), fontSize: 13),
+    ),
+  );
 }
 
 class _ActivityTile extends StatelessWidget {

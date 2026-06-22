@@ -10,11 +10,11 @@ class SubjectRepository {
   Stream<List<SubjectModel>> watchActiveSubjects() {
     return _db
         .collection('subjects')
-        .where('active', isEqualTo: true)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
               .map(SubjectModel.fromFirestore)
+              .where((subject) => subject.active)
               .toList(growable: false),
         );
   }

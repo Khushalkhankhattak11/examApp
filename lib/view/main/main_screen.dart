@@ -26,11 +26,20 @@ class MainScreen extends ConsumerWidget {
       ProfileScreen(),
     ];
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF131409),
-      // No AppBar — every screen owns its own top bar
-      body: IndexedStack(index: selectedIndex, children: pages),
-      bottomNavigationBar: const AppBottomNavBar(),
+    return PopScope(
+      // Back from a secondary tab returns Home instead of popping MainScreen.
+      canPop: selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && selectedIndex != 0) {
+          ref.read(navIndexProvider.notifier).setTab(0);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF131409),
+        // No AppBar — every screen owns its own top bar
+        body: IndexedStack(index: selectedIndex, children: pages),
+        bottomNavigationBar: const AppBottomNavBar(),
+      ),
     );
   }
 }

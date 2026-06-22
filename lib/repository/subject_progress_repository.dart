@@ -44,7 +44,6 @@ class SubjectProgressRepository {
               ?.whereType<String>()
               .toSet() ??
           <String>{};
-
       completedTopicIds.add(topicId);
 
       transaction.set(ref, {
@@ -56,5 +55,24 @@ class SubjectProgressRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     });
+  }
+
+  Future<void> markChapterCompleted({
+    required String uid,
+    required String subjectId,
+    required String chapterId,
+  }) async {
+    final ref = _db
+        .collection('users')
+        .doc(uid)
+        .collection('subjectProgress')
+        .doc(subjectId);
+
+    await ref.set({
+      'subjectId': subjectId,
+      'completedChapterIds': FieldValue.arrayUnion([chapterId]),
+      'lastChapterId': chapterId,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 }

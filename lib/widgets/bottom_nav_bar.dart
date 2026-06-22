@@ -59,17 +59,11 @@ class AppBottomNavBar extends ConsumerWidget {
                       behavior: HitTestBehavior.translucent,
                       onTap: () {
                         if (selected == index) {
-                          if (Navigator.of(context).canPop()) {
-                            Navigator.of(context).pop();
-                          }
                           return;
                         }
                         // ✅ Only update state — MainScreen's IndexedStack
                         //    switches the page, no Navigator needed
                         ref.read(navIndexProvider.notifier).setTab(index);
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
                       },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 250),

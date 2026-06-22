@@ -1,6 +1,12 @@
 // lib/view/exams/subject_detail_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../model/model.dart';
+import '../../view_model/nav_view_model.dart';
+import '../../view_model/providers.dart';
+import '../lecture/topic_lesson_screen.dart';
 
 // ── Chapter model ─────────────────────────────
 enum ChapterStatus { completed, inProgress, locked }
@@ -19,46 +25,67 @@ class ChapterItem {
   });
 }
 
-const _chapters = [
-  ChapterItem(
-    title: 'Chapter 1: Parts of Speech',
-    mcqCount: 24,
-    status: ChapterStatus.completed,
-    statusLabel: 'Completed',
-  ),
-  ChapterItem(
-    title: 'Chapter 2: Tenses',
-    mcqCount: 30,
-    status: ChapterStatus.inProgress,
-    statusLabel: '60% Accuracy',
-  ),
-  ChapterItem(
-    title: 'Chapter 3: Comprehension',
-    mcqCount: 20,
-    status: ChapterStatus.locked,
-    statusLabel: 'Not started',
-  ),
-  ChapterItem(
-    title: 'Chapter 4: Vocabulary',
-    mcqCount: 26,
-    status: ChapterStatus.locked,
-    statusLabel: 'Not started',
-  ),
-];
-
 // ─────────────────────────────────────────────
-class ExamScreen extends StatefulWidget {
+class ExamScreen extends ConsumerStatefulWidget {
   const ExamScreen({super.key});
 
   @override
-  State<ExamScreen> createState() => _ExamScreenState();
+  ConsumerState<ExamScreen> createState() => _ExamScreenState();
 }
 
-class _ExamScreenState extends State<ExamScreen> {
-  int _expandedIndex = 1;
+class _ExamScreenState extends ConsumerState<ExamScreen> {
+  int _expandedIndex = 0;
+  String? _appliedProgressKey;
 
   @override
   Widget build(BuildContext context) {
+    final userAsync = ref.watch(currentUserProvider);
+    final user = userAsync.valueOrNull;
+    final subjectsAsync = ref.watch(activeSubjectsProvider);
+    final subjects = subjectsAsync.valueOrNull ?? const <SubjectModel>[];
+    final subject = subjects.matchEducationSubject(
+      user?.educationSubject.trim() ?? '',
+    );
+    final chaptersAsync = subject == null
+        ? null
+        : ref.watch(subjectChaptersProvider(subject.id));
+    final chapters =
+        chaptersAsync?.valueOrNull ?? const <SubjectChapterModel>[];
+    final progressSubjectId = subject?.progressSubjectId ?? '';
+    final progress = user == null || progressSubjectId.isEmpty
+        ? null
+        : ref
+              .watch(
+                subjectProgressProvider(
+                  SubjectProgressRequest(
+                    uid: user.uid,
+                    subjectId: progressSubjectId,
+                  ),
+                ),
+              )
+              .valueOrNull;
+    final chapterItems = _chapterItems(chapters, progress);
+    _applyResumeChapter(chapterItems, progress);
+
+    final isLoading =
+        userAsync.isLoading ||
+        subjectsAsync.isLoading ||
+        chaptersAsync?.isLoading == true;
+    final error = subjectsAsync.error ?? chaptersAsync?.error;
+    final completedChapters = chapterItems
+        .where((item) => item.status == ChapterStatus.completed)
+        .length;
+    final progressValue = chapterItems.isEmpty
+        ? 0.0
+        : completedChapters / chapterItems.length;
+    final totalMcqs = chapters.fold<int>(
+      0,
+      (total, chapter) => total + chapter.mcqCount,
+    );
+    final fullTestQuestions = chapters
+        .expand((chapter) => chapter.chapterMcqs)
+        .toList(growable: false);
+
     return Scaffold(
       backgroundColor: const Color(0xFF131409),
       body: Stack(
@@ -67,34 +94,100 @@ class _ExamScreenState extends State<ExamScreen> {
 
           Column(
             children: [
-              _AppBar(),
+              _AppBar(
+                title: subject?.displayTitle ?? 'Exams',
+                initials: user?.initials ?? '?',
+                onBack: () => ref.read(navIndexProvider.notifier).setTab(0),
+              ),
 
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(2, 2, 0, 110),
-                  child: Column(
-                    children: [
-                      _SubjectHeroCard(),
-                      const SizedBox(height: 20),
-
-                      ...List.generate(_chapters.length, (i) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _ChapterTile(
-                            chapter: _chapters[i],
-                            isExpanded: _expandedIndex == i,
-                            onTap: () => setState(() {
-                              _expandedIndex = _expandedIndex == i ? -1 : i;
+                child: isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFFD8EE36),
+                        ),
+                      )
+                    : error != null
+                    ? _ExamMessage(
+                        message: 'Unable to load exams from Firebase.\n$error',
+                      )
+                    : subject == null
+                    ? _ExamMessage(
+                        message:
+                            'No course matches ${user?.educationSubject.isNotEmpty == true ? user!.educationSubject : 'your education subject'}.',
+                      )
+                    : chapters.isEmpty
+                    ? const _ExamMessage(
+                        message: 'No chapters are available for this subject.',
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(2, 2, 0, 110),
+                        child: Column(
+                          children: [
+                            _SubjectHeroCard(
+                              subject: subject,
+                              totalMcqs: totalMcqs,
+                              bestScore: user?.bestScore ?? 0,
+                              progress: progressValue,
+                            ),
+                            const SizedBox(height: 20),
+                            ...List.generate(chapters.length, (i) {
+                              final chapter = chapters[i];
+                              final item = chapterItems[i];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _ChapterTile(
+                                  chapter: item,
+                                  isExpanded: _expandedIndex == i,
+                                  onTap: () => setState(() {
+                                    _expandedIndex = _expandedIndex == i
+                                        ? -1
+                                        : i;
+                                  }),
+                                  onOpen: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => ChapterTopicsScreen(
+                                        subjectDocumentId: subject.id,
+                                        progressSubjectId: progressSubjectId,
+                                        chapterId: chapter.id,
+                                        chapterTitle: item.title,
+                                        chapterMcqs: chapter.chapterMcqs,
+                                      ),
+                                    ),
+                                  ),
+                                  onQuiz: () => _takeChapterQuiz(
+                                    user: user!,
+                                    chapter: chapter,
+                                    progressSubjectId: progressSubjectId,
+                                    chapterTitle: item.title,
+                                  ),
+                                ),
+                              );
                             }),
-                          ),
-                        );
-                      }),
-
-                      const SizedBox(height: 8),
-                      _FullTestCTA(),
-                    ],
-                  ),
-                ),
+                            const SizedBox(height: 8),
+                            _FullTestCTA(
+                              totalMcqs: totalMcqs,
+                              onTap: fullTestQuestions.isEmpty
+                                  ? null
+                                  : () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => TopicQuizScreen(
+                                          title: '${subject.displayTitle} Test',
+                                          questions: fullTestQuestions,
+                                          tracking: QuizTrackingData(
+                                            uid: user!.uid,
+                                            title:
+                                                '${subject.displayTitle} Test',
+                                            type: 'subject',
+                                            subjectId: progressSubjectId,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
               ),
             ],
           ),
@@ -102,12 +195,133 @@ class _ExamScreenState extends State<ExamScreen> {
       ),
     );
   }
+
+  List<ChapterItem> _chapterItems(
+    List<SubjectChapterModel> chapters,
+    SubjectProgressModel? progress,
+  ) {
+    final completedIds = progress?.completedChapterIds.toSet() ?? <String>{};
+    var previousCompleted = true;
+
+    return List.generate(chapters.length, (index) {
+      final chapter = chapters[index];
+      final completed =
+          completedIds.contains(chapter.id) ||
+          completedIds.contains(chapter.chapterId) ||
+          completedIds.contains(chapter.progressChapterId);
+      final unlocked = index == 0 || previousCompleted;
+      final isCurrent =
+          progress?.lastChapterId == chapter.id ||
+          progress?.lastChapterId == chapter.chapterId;
+      final status = completed
+          ? ChapterStatus.completed
+          : unlocked
+          ? ChapterStatus.inProgress
+          : ChapterStatus.locked;
+      previousCompleted = completed;
+
+      final number = chapter.order > 0 ? chapter.order : index + 1;
+      final rawTitle = chapter.displayTitle;
+      final title = rawTitle.toLowerCase().startsWith('chapter')
+          ? rawTitle
+          : 'Chapter $number: $rawTitle';
+      return ChapterItem(
+        title: title,
+        mcqCount: chapter.mcqCount,
+        status: status,
+        statusLabel: completed
+            ? 'Completed'
+            : !unlocked
+            ? 'Locked'
+            : isCurrent
+            ? 'In progress'
+            : 'Ready to start',
+      );
+    });
+  }
+
+  void _applyResumeChapter(
+    List<ChapterItem> chapters,
+    SubjectProgressModel? progress,
+  ) {
+    if (chapters.isEmpty) return;
+    final progressKey = [
+      progress?.lastChapterId ?? '',
+      ...?progress?.completedChapterIds,
+    ].join('|');
+    if (_appliedProgressKey == progressKey) return;
+    _appliedProgressKey = progressKey;
+    final firstIncomplete = chapters.indexWhere(
+      (chapter) => chapter.status == ChapterStatus.inProgress,
+    );
+    _expandedIndex = firstIncomplete == -1
+        ? chapters.length - 1
+        : firstIncomplete;
+  }
+
+  Future<void> _takeChapterQuiz({
+    required UserModel user,
+    required SubjectChapterModel chapter,
+    required String progressSubjectId,
+    required String chapterTitle,
+  }) async {
+    if (chapter.chapterMcqs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No chapter MCQs are available in Firebase yet.'),
+        ),
+      );
+      return;
+    }
+
+    final result = await Navigator.of(context).push<QuizAttemptResult>(
+      MaterialPageRoute(
+        builder: (_) => TopicQuizScreen(
+          title: '$chapterTitle Quiz',
+          questions: chapter.chapterMcqs,
+          tracking: QuizTrackingData(
+            uid: user.uid,
+            title: '$chapterTitle Quiz',
+            type: 'chapter',
+            subjectId: progressSubjectId,
+            chapterId: chapter.id,
+          ),
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+
+    try {
+      await ref
+          .read(subjectProgressRepositoryProvider)
+          .markChapterCompleted(
+            uid: user.uid,
+            subjectId: progressSubjectId,
+            chapterId: chapter.id,
+          );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save chapter completion: $error')),
+      );
+    }
+  }
 }
 
 // ─────────────────────────────────────────────
 //  APP BAR
 // ─────────────────────────────────────────────
 class _AppBar extends StatelessWidget {
+  final String title;
+  final String initials;
+  final VoidCallback onBack;
+
+  const _AppBar({
+    required this.title,
+    required this.initials,
+    required this.onBack,
+  });
+
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
@@ -121,7 +335,7 @@ class _AppBar extends StatelessWidget {
         children: [
           // Back
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: onBack,
             child: Container(
               width: 40,
               height: 40,
@@ -137,10 +351,12 @@ class _AppBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          const Expanded(
+          Expanded(
             child: Text(
-              'English Proficiency',
-              style: TextStyle(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFFD8EE36),
@@ -158,10 +374,14 @@ class _AppBar extends StatelessWidget {
               color: const Color(0xFF5822B8).withValues(alpha: 0.3),
               border: Border.all(color: const Color(0xFF464834)),
             ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: Color(0xFFC7C8AE),
-              size: 20,
+            child: Center(
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Color(0xFFD8EE36),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
         ],
@@ -174,6 +394,18 @@ class _AppBar extends StatelessWidget {
 //  SUBJECT HERO CARD
 // ─────────────────────────────────────────────
 class _SubjectHeroCard extends StatelessWidget {
+  final SubjectModel subject;
+  final int totalMcqs;
+  final int bestScore;
+  final double progress;
+
+  const _SubjectHeroCard({
+    required this.subject,
+    required this.totalMcqs,
+    required this.bestScore,
+    required this.progress,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -222,9 +454,11 @@ class _SubjectHeroCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'ADVANCED LEVEL',
-                      style: TextStyle(
+                    Text(
+                      subject.level.isNotEmpty
+                          ? subject.level.toUpperCase().replaceAll('_', ' ')
+                          : 'COURSE',
+                      style: const TextStyle(
                         fontSize: 10,
                         letterSpacing: 1.5,
                         color: Color(0xFFC7C8AE),
@@ -232,44 +466,57 @@ class _SubjectHeroCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Subject Mastery',
-                      style: TextStyle(
+                    Text(
+                      subject.displayTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
                       children: [
-                        const Icon(
-                          Icons.dataset_rounded,
-                          color: Color(0xFFD8EE36),
-                          size: 14,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.dataset_rounded,
+                              color: Color(0xFFD8EE36),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$totalMcqs Total MCQs',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFC7C8AE),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          '2,450 Total MCQs',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFFC7C8AE),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Icon(
-                          Icons.workspace_premium_rounded,
-                          color: Color(0xFFD8EE36),
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          'Best: 92%',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFFD8EE36),
-                            fontWeight: FontWeight.w600,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.workspace_premium_rounded,
+                              color: Color(0xFFD8EE36),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Best: $bestScore%',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFD8EE36),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -286,7 +533,7 @@ class _SubjectHeroCard extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     CircularProgressIndicator(
-                      value: 0.75,
+                      value: progress,
                       strokeWidth: 7,
                       backgroundColor: const Color(0xFF353629),
                       valueColor: const AlwaysStoppedAnimation(
@@ -294,9 +541,9 @@ class _SubjectHeroCard extends StatelessWidget {
                       ),
                       strokeCap: StrokeCap.round,
                     ),
-                    const Text(
-                      '75%',
-                      style: TextStyle(
+                    Text(
+                      '${(progress * 100).round()}%',
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: Color(0xFFD8EE36),
@@ -320,11 +567,15 @@ class _ChapterTile extends StatelessWidget {
   final ChapterItem chapter;
   final bool isExpanded;
   final VoidCallback onTap;
+  final VoidCallback onOpen;
+  final VoidCallback onQuiz;
 
   const _ChapterTile({
     required this.chapter,
     required this.isExpanded,
     required this.onTap,
+    required this.onOpen,
+    required this.onQuiz,
   });
 
   @override
@@ -459,19 +710,19 @@ class _ChapterTile extends StatelessWidget {
                       children: [
                         Expanded(
                           child: _ActionBtn(
-                            label: 'PRACTICE',
-                            icon: Icons.history_edu_rounded,
+                            label: 'LEARN TOPICS',
+                            icon: Icons.menu_book_outlined,
                             filled: false,
-                            onTap: () {},
+                            onTap: onOpen,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _ActionBtn(
                             label: 'TAKE QUIZ',
-                            icon: Icons.timer_rounded,
+                            icon: Icons.quiz_rounded,
                             filled: true,
-                            onTap: () {},
+                            onTap: onQuiz,
                           ),
                         ),
                       ],
@@ -482,9 +733,11 @@ class _ChapterTile extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Daily Goal: 18/30 MCQs',
-                          style: TextStyle(
+                        Text(
+                          chapter.status == ChapterStatus.completed
+                              ? 'Chapter completed'
+                              : 'Chapter progress',
+                          style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFFC7C8AE),
                           ),
@@ -493,11 +746,11 @@ class _ChapterTile extends StatelessWidget {
                         Expanded(
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(99),
-                            child: const LinearProgressIndicator(
-                              value: 0.6,
+                            child: LinearProgressIndicator(
+                              value: isCompleted ? 1 : 0,
                               minHeight: 4,
-                              backgroundColor: Color(0xFF353629),
-                              valueColor: AlwaysStoppedAnimation(
+                              backgroundColor: const Color(0xFF353629),
+                              valueColor: const AlwaysStoppedAnimation(
                                 Color(0xFFD8EE36),
                               ),
                             ),
@@ -571,74 +824,144 @@ class _ActionBtn extends StatelessWidget {
 //  FULL SUBJECT TEST CTA
 // ─────────────────────────────────────────────
 class _FullTestCTA extends StatelessWidget {
+  final int totalMcqs;
+  final VoidCallback? onTap;
+
+  const _FullTestCTA({required this.totalMcqs, required this.onTap});
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        decoration: BoxDecoration(
-          color: const Color(0xCC131309),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: const Color(0xFFD8EE36).withValues(alpha: 0.2),
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? .55 : 1,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          decoration: BoxDecoration(
+            color: const Color(0xCC131309),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFFD8EE36).withValues(alpha: 0.2),
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            // Medal icon
-            Container(
-              width: 48,
-              height: 48,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
+          child: Row(
+            children: [
+              // Medal icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFD8EE36),
+                ),
+                child: const Icon(
+                  Icons.military_tech_rounded,
+                  color: Color(0xFF191E00),
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // Text
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Full Subject Test',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$totalMcqs MCQs • Subject Test',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 1.2,
+                        color: Color(0xFFD8EE36),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Icon(
+                Icons.arrow_forward_rounded,
                 color: Color(0xFFD8EE36),
+                size: 22,
               ),
-              child: const Icon(
-                Icons.military_tech_rounded,
-                color: Color(0xFF191E00),
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Text
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Full Subject Test',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    '100 MCQs • 120 Minutes',
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 1.2,
-                      color: Color(0xFFD8EE36),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const Icon(
-              Icons.arrow_forward_rounded,
-              color: Color(0xFFD8EE36),
-              size: 22,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _ExamMessage extends StatelessWidget {
+  final String message;
+
+  const _ExamMessage({required this.message});
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Color(0xFFC7C8AE), fontSize: 14),
+      ),
+    ),
+  );
+}
+
+extension on SubjectModel {
+  String get progressSubjectId => subjectId.isNotEmpty ? subjectId : id;
+}
+
+extension on List<SubjectModel> {
+  SubjectModel? matchEducationSubject(String educationSubject) {
+    final needle = educationSubject.normalizedSubjectKey;
+    if (needle.isEmpty || needle == 'other') return null;
+
+    for (final subject in this) {
+      final exactKeys = [
+        subject.id,
+        subject.subjectId,
+        subject.title,
+        subject.name,
+        subject.code,
+      ].map((value) => value.normalizedSubjectKey);
+      if (exactKeys.contains(needle)) return subject;
+    }
+
+    for (final subject in this) {
+      final searchable = [
+        subject.title,
+        subject.name,
+        subject.description,
+        subject.category,
+      ].map((value) => value.normalizedSubjectKey);
+      if (searchable.any(
+        (value) =>
+            value.isNotEmpty &&
+            (needle.contains(value) || value.contains(needle)),
+      )) {
+        return subject;
+      }
+    }
+    return null;
+  }
+}
+
+extension on String {
+  String get normalizedSubjectKey =>
+      toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 }
 
 // ─────────────────────────────────────────────

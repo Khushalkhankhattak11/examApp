@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'subject_topic_model.dart';
 
 class SubjectChapterModel {
   final String id;
@@ -9,6 +10,7 @@ class SubjectChapterModel {
   final int mcqCount;
   final int topicCount;
   final List<String> topicIds;
+  final List<TopicMcqModel> chapterMcqs;
   final bool active;
 
   const SubjectChapterModel({
@@ -20,6 +22,7 @@ class SubjectChapterModel {
     this.mcqCount = 0,
     this.topicCount = 0,
     this.topicIds = const [],
+    this.chapterMcqs = const [],
     this.active = true,
   });
 
@@ -30,6 +33,11 @@ class SubjectChapterModel {
     final topicIds =
         (map['topicIds'] as List<dynamic>?)?.whereType<String>().toList() ??
         const <String>[];
+    final chapterMcqs = (map['chapterMcqs'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((value) => TopicMcqModel.fromMap(value.cast<String, dynamic>()))
+        .where((mcq) => mcq.question.isNotEmpty && mcq.options.isNotEmpty)
+        .toList(growable: false);
 
     return SubjectChapterModel(
       id: doc.id,
@@ -45,12 +53,13 @@ class SubjectChapterModel {
           (map['mcqCount'] as num?)?.toInt() ??
           (map['totalMcqs'] as num?)?.toInt() ??
           (map['totalMCQs'] as num?)?.toInt() ??
-          0,
+          chapterMcqs.length,
       topicCount:
           (map['topicCount'] as num?)?.toInt() ??
           (map['totalTopics'] as num?)?.toInt() ??
           topicIds.length,
       topicIds: topicIds,
+      chapterMcqs: chapterMcqs,
       active: map['active'] as bool? ?? true,
     );
   }
