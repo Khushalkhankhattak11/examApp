@@ -51,19 +51,18 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAFw7aMIhB_sC6rqbN_NoyfBf7ytrL9Kq8',
-    appId: '1:813830491222:android:898feea57098c527edfff7',
+    appId: '1:813830491222:android:0aeff1508706a6a4edfff7',
     messagingSenderId: '813830491222',
     projectId: 'examaceapp-da02c',
     storageBucket: 'examaceapp-da02c.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBDD6nmHfIhQKhkNVmHfH_sByDYmTh_Vi4',
-    appId: '1:813830491222:ios:f94bcd456ccfefc7edfff7',
+    appId: '1:813830491222:ios:60bfb77d40cde741edfff7',
     messagingSenderId: '813830491222',
     projectId: 'examaceapp-da02c',
     storageBucket: 'examaceapp-da02c.firebasestorage.app',
-    iosClientId: '813830491222-9g4fkopatmahatm62cnor6vrif8tebq7.apps.googleusercontent.com',
-    iosBundleId: 'com.example.examace',
+    iosClientId: '813830491222-5894p8oumt4b0ntta1i4q4ccfbun7tmu.apps.googleusercontent.com',
+    iosBundleId: 'com.examace.app',
   );
 }

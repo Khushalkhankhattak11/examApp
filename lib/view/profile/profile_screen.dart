@@ -702,6 +702,48 @@ class _ProfileMenu extends StatelessWidget {
         ),
         SizedBox(height: r.h20),
 
+        Padding(
+          padding: EdgeInsets.only(left: r.sp8, bottom: r.h10),
+          child: Text(
+            'LEGAL & PRIVACY',
+            style: TextStyle(
+              fontSize: r.fs11,
+              letterSpacing: 1.5,
+              color: const Color(0xFFC7C8AE),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xCC13131A),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF1E1E2E)),
+          ),
+          child: Column(
+            children: [
+              _MenuItem(
+                r: r,
+                icon: Icons.privacy_tip_rounded,
+                label: 'Privacy Policy',
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.privacyPolicy),
+                isFirst: true,
+              ),
+              _Divider(),
+              _MenuItem(
+                r: r,
+                icon: Icons.description_rounded,
+                label: 'Terms & Conditions',
+                onTap: () =>
+                    Navigator.pushNamed(context, AppRoutes.termsAndConditions),
+                isLast: true,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: r.h20),
+
         // Logout button
         GestureDetector(
           onTap: onLogout,

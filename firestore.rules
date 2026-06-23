@@ -69,6 +69,17 @@ service cloud.firestore {
       }
     }
 
+    // Exam simulator content, including nested subjects and MCQs.
+    match /exams/{examId} {
+      allow read: if signedIn();
+      allow write: if false;
+
+      match /{document=**} {
+        allow read: if signedIn();
+        allow write: if false;
+      }
+    }
+
     // Main user profile. A user can only access their own document.
     match /users/{userId} {
       allow read: if owns(userId);
@@ -95,6 +106,12 @@ service cloud.firestore {
         allow read: if false;
         allow create, update: if owns(userId) && validFcmToken();
         allow delete: if owns(userId);
+      }
+
+      // MCQs bookmarked by this user. The collection name intentionally
+      // follows the app's requested `favortie` spelling.
+      match /favortie/{favoriteId} {
+        allow read, create, update, delete: if owns(userId);
       }
 
       // Future private user subcollections are private by default.

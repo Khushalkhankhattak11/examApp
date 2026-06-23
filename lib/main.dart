@@ -7,6 +7,7 @@ import 'package:examace/view/lecture/quizz/quizz_screen.dart';
 import 'package:examace/view/main/main_screen.dart';
 import 'package:examace/view/onboarding/onboarding_view.dart';
 import 'package:examace/view/profile/notifications/notifications_screen.dart';
+import 'package:examace/view/profile/legal_document_screen.dart';
 import 'package:examace/view/profile/profile_screen.dart';
 import 'package:examace/view/profile/report_card/report_card_screen.dart';
 import 'package:examace/view/splach/splach_screen.dart';
@@ -61,6 +62,11 @@ class App extends ConsumerWidget {
         AppRoutes.profile: (_) => const ProfileScreen(),
         AppRoutes.notifications: (_) => const NotificationsScreen(),
         AppRoutes.reportCard: (_) => const ReportCardScreen(),
+        AppRoutes.privacyPolicy: (_) =>
+            const LegalDocumentScreen(type: LegalDocumentType.privacyPolicy),
+        AppRoutes.termsAndConditions: (_) => const LegalDocumentScreen(
+          type: LegalDocumentType.termsAndConditions,
+        ),
         AppRoutes.quizz: (_) => const QuizScreen(),
         AppRoutes.quizzResult: (_) => const ReviewAnswersScreen(),
       },

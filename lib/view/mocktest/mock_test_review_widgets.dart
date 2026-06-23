@@ -49,7 +49,10 @@ class _AnswerReviewTopBar extends StatelessWidget {
 }
 
 class _ReviewScorePanel extends StatelessWidget {
-  const _ReviewScorePanel();
+  final int correct;
+  final int total;
+
+  const _ReviewScorePanel({required this.correct, required this.total});
 
   @override
   Widget build(BuildContext context) {
@@ -63,16 +66,21 @@ class _ReviewScorePanel extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Expanded(
-            child: _MetricBlock(label: 'ACCURACY', value: '84%'),
+          Expanded(
+            child: _MetricBlock(
+              label: 'ACCURACY',
+              value: total == 0
+                  ? '0%'
+                  : '${((correct / total) * 100).round()}%',
+            ),
           ),
           Container(width: 1, height: 32, color: const Color(0xFF4A4F36)),
-          const Expanded(
+          Expanded(
             child: Align(
               alignment: Alignment.centerRight,
               child: _MetricBlock(
                 label: 'SCORE',
-                value: '42/50',
+                value: '$correct/$total',
                 alignRight: true,
               ),
             ),

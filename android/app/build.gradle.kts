@@ -20,7 +20,7 @@ if (hasReleaseSigning) {
 }
 
 android {
-    namespace = "com.example.examace"
+    namespace = "com.examace.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -34,9 +34,8 @@ android {
     }
 
     defaultConfig {
-        // This ID must remain unchanged after the first Play Store upload and
-        // currently matches the registered Firebase Android app.
-        applicationId = "com.example.examace"
+        // This ID must remain unchanged after the first Play Store upload.
+        applicationId = "com.examace.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

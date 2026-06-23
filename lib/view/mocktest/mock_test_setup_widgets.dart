@@ -57,8 +57,9 @@ class _SetupTopBar extends StatelessWidget {
 
 class _ExamHeader extends StatelessWidget {
   final String timeText;
+  final VoidCallback onClose;
 
-  const _ExamHeader({required this.timeText});
+  const _ExamHeader({required this.timeText, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +78,26 @@ class _ExamHeader extends StatelessWidget {
           ),
           child: Row(
             children: [
+              GestureDetector(
+                onTap: onClose,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: _MockTestSetupScreenState._tile,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: _MockTestSetupScreenState._border,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.redAccent,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               const Text(
                 'ExamAce',
                 style: TextStyle(

@@ -5,12 +5,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../repository/auth_repository.dart';
+import '../repository/favorite_mcq_repository.dart';
 import '../repository/onboarding_repository.dart';
 import '../repository/subject_chapter_repository.dart';
 import '../repository/subject_progress_repository.dart';
 import '../repository/subject_repository.dart';
 import '../repository/subject_topic_repository.dart';
 import '../repository/notification_repository.dart';
+import '../repository/mock_exam_repository.dart';
 import '../repository/user_repository.dart'; // ← ADD
 import '../model/model.dart'; // ← ADD
 
@@ -30,6 +32,14 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
   return NotificationRepository();
+});
+
+final mockExamRepositoryProvider = Provider<MockExamRepository>((ref) {
+  return MockExamRepository();
+});
+
+final favoriteMcqRepositoryProvider = Provider<FavoriteMcqRepository>((ref) {
+  return FavoriteMcqRepository();
 });
 
 final subjectRepositoryProvider = Provider<SubjectRepository>((ref) {
@@ -130,6 +140,23 @@ final userNotificationsProvider =
 
 final activeSubjectsProvider = StreamProvider<List<SubjectModel>>((ref) {
   return ref.read(subjectRepositoryProvider).watchActiveSubjects();
+});
+
+final activeMockExamsProvider = StreamProvider<List<MockExamModel>>((ref) {
+  return ref.read(mockExamRepositoryProvider).watchActiveExams();
+});
+
+final mockExamSubjectsProvider =
+    StreamProvider.family<List<MockExamSubjectModel>, String>((ref, examId) {
+      return ref.read(mockExamRepositoryProvider).watchActiveSubjects(examId);
+    });
+
+final favoriteMcqIdsProvider = StreamProvider.family<Set<String>, String>((
+  ref,
+  uid,
+) {
+  if (uid.isEmpty) return Stream.value(const <String>{});
+  return ref.read(favoriteMcqRepositoryProvider).watchFavoriteIds(uid);
 });
 
 final subjectChaptersProvider =

@@ -17,6 +17,8 @@ class AppRoutes {
   static const String settings = '/settings';
   static const String chat = '/chat';
   static const String reportCard = '/reportCard';
+  static const String privacyPolicy = '/privacy-policy';
+  static const String termsAndConditions = '/terms-and-conditions';
   static const notifications = '/notifications';
   static const quizz = '/quizzScreen';
   static const quizzResult = '/quizzResult';

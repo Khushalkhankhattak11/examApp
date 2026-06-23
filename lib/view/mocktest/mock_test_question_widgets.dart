@@ -3,12 +3,18 @@ part of 'mock_test_screen.dart';
 class _QuestionPanel extends StatelessWidget {
   final _MockQuestion question;
   final VoidCallback onFlag;
+  final VoidCallback onSave;
   final ValueChanged<int> onSelect;
+  final bool saved;
+  final bool saving;
 
   const _QuestionPanel({
     required this.question,
     required this.onFlag,
+    required this.onSave,
     required this.onSelect,
+    required this.saved,
+    required this.saving,
   });
 
   @override
@@ -50,6 +56,45 @@ class _QuestionPanel extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              GestureDetector(
+                onTap: saving ? null : onSave,
+                child: Row(
+                  children: [
+                    if (saving)
+                      const SizedBox(
+                        width: 15,
+                        height: 15,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _MockTestSetupScreenState._accent,
+                        ),
+                      )
+                    else
+                      Icon(
+                        saved
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_border_rounded,
+                        color: saved
+                            ? _MockTestSetupScreenState._accent
+                            : _MockTestSetupScreenState._muted,
+                        size: 18,
+                      ),
+                    const SizedBox(width: 5),
+                    Text(
+                      saved ? 'SAVED' : 'SAVE',
+                      style: TextStyle(
+                        color: saved
+                            ? _MockTestSetupScreenState._accent
+                            : _MockTestSetupScreenState._muted,
+                        fontSize: 8,
+                        letterSpacing: 1.1,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
               GestureDetector(
                 onTap: onFlag,
                 child: Row(
